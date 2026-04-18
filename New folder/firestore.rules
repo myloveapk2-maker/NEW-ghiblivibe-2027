@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (UID)
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - email: string (optional)
+    //   - photoURL: string (optional)
+    //   - role: string (required, 'user' or 'admin')
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: posts/{postId}/likes
+    // Document ID: userId (UID)
+    // Fields:
+    //   - postId: string (required)
+    //   - userId: string (required)
+    //   - reaction: string (required, enum)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: posts/{postId}/comments
+    // Document ID: auto-generated
+    // Fields:
+    //   - postId: string (required)
+    //   - userId: string (required)
+    //   - userName: string (required)
+    //   - userPhoto: string (optional)
+    //   - text: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "myloveapk2@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'role', 'createdAt', 'bio']) &&
+             data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             (data.email == null || isValidEmail(data.email)) &&
+             data.role in ['user', 'admin'] &&
+             data.createdAt is timestamp &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500));
+    }
+
+    function isValidLike(data, postId) {
+      return data.keys().hasOnly(['postId', 'userId', 'reaction', 'createdAt']) &&
+             data.postId == postId &&
+             data.userId == request.auth.uid &&
+             data.reaction in ['love', 'haha', 'wow', 'sad', 'angry'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidComment(data, postId) {
+      return data.keys().hasOnly(['postId', 'userId', 'userName', 'userPhoto', 'text', 'createdAt']) &&
+             data.postId == postId &&
+             data.userId == request.auth.uid &&
+             data.userName is string && data.userName.size() > 0 && data.userName.size() < 100 &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.createdAt is timestamp;
+     }
+
+    function isValidFollow(data, followerId, followingId) {
+      return data.keys().hasOnly(['followerId', 'followingId', 'createdAt']) &&
+             data.followerId == followerId &&
+             data.followingId == followingId &&
+             data.followerId == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasOnly(['reporterId', 'reporterName', 'targetId', 'targetType', 'reason', 'details', 'status', 'createdAt']) &&
+             data.reporterId == request.auth.uid &&
+             data.targetType in ['post', 'user'] &&
+             data.reason is string && data.reason.size() > 0 && data.reason.size() < 500 &&
+             (!('details' in data) || (data.details is string && data.details.size() <= 1000)) &&
+             data.status == 'pending' &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == 'user';
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+      allow delete: if isAdmin();
+
+      match /followers/{followerId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && isValidFollow(request.resource.data, followerId, userId);
+        allow delete: if isOwner(followerId) || isOwner(userId) || isAdmin();
+      }
+
+      match /following/{followingId} {
+        allow read: if true;
+        allow create: if isOwner(userId) && isValidFollow(request.resource.data, userId, followingId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) || isAdmin();
+      }
+
+      match /saved/{savedId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isOwner(resource.data.authorId) || isAdmin();
+      allow delete: if isOwner(resource.data.authorId) || isAdmin();
+
+      match /likes/{userId} {
+        allow read: if true;
+        allow create: if isOwner(userId) && isValidLike(request.resource.data, postId);
+        allow update: if isOwner(userId) && isValidLike(request.resource.data, postId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && isValidComment(request.resource.data, postId);
+        allow update: if isOwner(resource.data.userId) && isValidComment(request.resource.data, postId);
+        allow delete: if isOwner(resource.data.userId) || isAdmin();
+      }
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidReport(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

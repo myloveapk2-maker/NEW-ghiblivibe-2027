@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information and preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID from Firebase Auth." },
+        "displayName": { "type": "string", "description": "User's display name." },
+        "email": { "type": "string", "format": "email", "description": "User's email address." },
+        "photoURL": { "type": "string", "description": "URL to user's profile picture." },
+        "bio": { "type": "string", "description": "A brief biography of the user." },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User's role in the application." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the profile was created." }
+      },
+      "required": ["uid", "displayName", "role", "createdAt"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "Represents a user's reaction to a post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "ID of the post being liked." },
+        "userId": { "type": "string", "description": "ID of the user who liked the post." },
+        "reaction": { "type": "string", "enum": ["love", "haha", "wow", "sad", "angry"], "description": "Type of reaction." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the like was created." }
+      },
+      "required": ["postId", "userId", "reaction", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A user's comment on a post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "ID of the post." },
+        "userId": { "type": "string", "description": "ID of the user who commented." },
+        "userName": { "type": "string", "description": "Name of the commenter." },
+        "userPhoto": { "type": "string", "description": "Photo of the commenter." },
+        "text": { "type": "string", "description": "The comment text." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the comment was posted." }
+      },
+      "required": ["postId", "userId", "userName", "text", "createdAt"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "Represents a follow relationship between users.",
+      "type": "object",
+      "properties": {
+        "followerId": { "type": "string", "description": "ID of the user who is following." },
+        "followingId": { "type": "string", "description": "ID of the user being followed." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the follow was created." }
+      },
+      "required": ["followerId", "followingId", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "A user's report regarding inappropriate content or behavior.",
+      "type": "object",
+      "properties": {
+        "reporterId": { "type": "string", "description": "ID of the user filing the report." },
+        "reporterName": { "type": "string", "description": "Name of the reporter." },
+        "targetId": { "type": "string", "description": "ID of the post or user being reported." },
+        "targetType": { "type": "string", "enum": ["post", "user"], "description": "Type of the reported entity." },
+        "reason": { "type": "string", "description": "The reason for the report." },
+        "details": { "type": "string", "description": "Additional details about the report." },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "dismissed"], "description": "Status of the report." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the report was created." }
+      },
+      "required": ["reporterId", "targetId", "targetType", "reason", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile documents."
+    },
+    "/posts/{postId}/likes/{userId}": {
+      "schema": "Like",
+      "description": "Likes on a specific post."
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on a specific post."
+    },
+    "/users/{userId}/followers/{followerId}": {
+      "schema": "Follow",
+      "description": "Followers of a user."
+    },
+    "/users/{userId}/following/{followingId}": {
+      "schema": "Follow",
+      "description": "Users followed by a user."
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Reports filed by users."
+    }
+  }
+}
